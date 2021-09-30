@@ -23,7 +23,7 @@ class FormatService
      *
      * @return Metable
      */
-    public function formatMetaData(Metable $data)
+    public function formatMetaData(Metable $data): Metable
     {
         $meta = new Meta();
 
@@ -88,7 +88,7 @@ class FormatService
      *
      * @return string
      */
-    public function uploadFile(UploadedFile $file)
+    public function uploadFile(UploadedFile $file): string
     {
         $fileName = time() . '.' . $file->extension();
 
@@ -103,7 +103,7 @@ class FormatService
      *
      * @return string
      */
-    public function uploadPhoto(UploadedFile $image, string $path)
+    public function uploadPhoto(UploadedFile $image, string $path): string
     {
         $imageName = time() . $image->getClientOriginalName();
         $destinationPath = public_path($path);
@@ -132,7 +132,7 @@ class FormatService
      *
      * @return string
      */
-    public function setMetaDescription(string $description, $length = 152)
+    public function setMetaDescription(string $description, $length = 152): string
     {
         $string = strip_tags($description);
         $string = str_replace('&Euml;', 'E', $string);
