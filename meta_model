@@ -1,0 +1,120 @@
+<?php
+
+
+namespace App\Models;
+
+
+use App\Interfaces\Metable;
+
+class Meta implements Metable
+{
+    const DEFAULT_IMAGE = 'img/IMG_0149.jpg';
+
+    public string $title;
+    public string $url;
+    public string $image;
+    public string $created_at;
+    public string $updated_at;
+    public string $description;
+    public string $author;
+    public string $lang;
+
+    /**
+     * Meta constructor.
+     *
+     * @param string|null $url
+     * @param string|null $image
+     */
+    public function __construct(?string $url = '', ?string $image = self::DEFAULT_IMAGE)
+    {
+        $this->setUrl($url)->setCreatedAt()->setUpdatedAt()->setImage($image);
+    }
+
+    /**
+     * @param string|null $title
+     *
+     * @return Meta
+     */
+    public function setTitle(?string $title = null): Meta
+    {
+        $this->title = $title ? $title . ' - The Coffeeshops' : 'The Coffeeshops';
+        return $this;
+    }
+
+    /**
+     * @param string|null $lang
+     *
+     * @return Meta
+     */
+    public function setLang(?string $lang = 'nl_NL'): Meta
+    {
+        $this->lang = $lang ? $lang: 'nl_NL';
+        return $this;
+    }
+
+    /**
+     * @param string $url
+     *
+     * @return Meta
+     */
+    public function setUrl(string $url): Meta
+    {
+        $this->url = config('app.url') . '/' . $url;
+        return $this;
+    }
+
+    /**
+     * @param string $image
+     *
+     * @return Meta
+     */
+    public function setImage(string $image): Meta
+    {
+        //$this->image = config('app.url') . '/' . $image; todo check path image meta
+        $this->image = $image;
+        return $this;
+    }
+
+    /**
+     * @param string $created_at
+     * @return Meta
+     */
+    public function setCreatedAt(?string $created_at = null): Meta
+    {
+        $this->created_at = $created_at ?? date("Y-m-d H:i:s");
+        return $this;
+    }
+
+    /**
+     * @param string $updated_at
+     *
+     * @return Meta
+     */
+    public function setUpdatedAt(?string $updated_at = null): Meta
+    {
+        $this->updated_at = $updated_at ?? date("Y-m-d H:i:s");
+        return $this;
+    }
+
+    /**
+     * @param string $description
+     *
+     * @return Meta
+     */
+    public function setDescription(string $description): Meta
+    {
+        $this->description = $description;
+        return $this;
+    }
+
+    /**
+     * @param string $author
+     *
+     * @return $this
+     */
+    public function setAuthor(string $author)
+    {
+        $this->author = $author ?? 'The Coffeeshops';
+        return $this;
+    }
+}
