@@ -1,0 +1,178 @@
+<?php
+
+namespace App\Models;
+
+use App\Interfaces\Metable;
+use App\Services\FormatService;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Storage;
+
+class News extends Model implements Metable
+{
+    const SIZE_IMAGE_NEWS = 840;
+    const SIZE_THUMB_NEWS = 660;
+
+    protected $table = 'news';
+    protected $with = ['category', 'author', 'text'];
+
+    protected $fillable = [
+        'image', 'title', 'path', 'locked', 'description', 'author_id', 'category_id', 'breaking',
+        'meta_description', 'created_at', 'updated_at'
+    ];
+
+    /**
+     * @return \Illuminate\Database\Eloquent\Relations\HasOne
+     */
+    public function category()
+    {
+        return $this->hasOne('App\Models\Category', 'id', 'category_id');
+    }
+
+    /**
+     * @return \Illuminate\Database\Eloquent\Relations\HasOne
+     */
+    public function text()
+    {
+        return $this->hasOne('App\Models\NewsText', 'news_id', 'id');
+    }
+
+    /**
+     * @return \Illuminate\Database\Eloquent\Relations\HasOne
+     */
+    public function author()
+    {
+        return $this->hasOne('App\User', 'id', 'author_id');
+    }
+
+    /**
+     * @return false|string
+     */
+    public function getDateAttribute()
+    {
+        return date("F j, Y", strtotime($this->created_at));
+    }
+
+    /**
+     * @return false|string
+     */
+    public function getDateUpdateAttribute()
+    {
+        return date("F j, Y", strtotime($this->updated_at));
+    }
+
+    /**
+     * @return string
+     */
+    public function getShortTextAttribute()
+    {
+        $format = new FormatService();
+        return $format->setMetaDescription($this->text->description, 200);
+    }
+
+    /**
+     * @return string
+     */
+    public function getFullImageAttribute()
+    {
+        return Storage::url(FormatService::PATH_IMAGE . $this->image);
+    }
+
+    /**
+     * @return string
+     */
+    public function getImage480Attribute()
+    {
+        if ($this->image) {
+            $info = pathinfo($this->image);
+
+            return Storage::url(FormatService::PATH_IMAGE . $info['filename'] . '_480.' . $info['extension']);
+        }
+
+        return Storage::url(FormatService::PATH_NO_IMAGE_FOUND);
+    }
+
+    /**
+     * @return string
+     */
+    public function getThumb480Attribute()
+    {
+        if ($this->image) {
+            $info = pathinfo($this->image);
+
+            return Storage::url(FormatService::PATH_THUMB . $info['filename'] . '_480.' . $info['extension']);
+        }
+
+        return Storage::url(FormatService::PATH_NO_IMAGE_FOUND);
+    }
+
+    /**
+     * @return string
+     */
+    public function getFullThumbAttribute()
+    {
+        if ($this->image) {
+            $info = pathinfo($this->image);
+
+            return Storage::url(FormatService::PATH_THUMB . $info['filename'] . '.' . $info['extension']);
+        }
+
+        return Storage::url(FormatService::PATH_NO_IMAGE_FOUND);
+    }
+
+    /**
+     * @return string
+     */
+    public function getAdmDescriptionAttribute()
+    {
+        $format = new FormatService();
+        return $format->setMetaDescription($this->text->description, 200);
+    }
+
+    /**
+     * @param string|null $locked
+     */
+    public function setLockedAttribute(?string $locked)
+    {
+        $this->attributes['locked'] = $locked ? 1 : 0;
+    }
+
+    /**
+     * @param string|null $breaking
+     */
+    public function setBreakingAttribute(?string $breaking)
+    {
+        $this->attributes['breaking'] = $breaking ? 1 : 0;
+    }
+
+    /**
+     * @param string|null $path
+     */
+    public function setPathAttribute(?string $path)
+    {
+        $format = new FormatService();
+        $this->attributes['path'] = $format->getTitlePath($path ?? $this->attributes['title']);
+    }
+
+    /**
+     * @param string|null $metaDescription
+     */
+    public function setMetaDescriptionAttribute(?string $metaDescription)
+    {
+        $format = new FormatService();
+        $this->attributes['meta_description'] = $format->setMetaDescription(
+            $metaDescription ?? $this->attributes['description']
+        );
+    }
+
+    public function setImageAttribute(): void
+    {
+        if (request()->file('image') && request()->file('image')->isValid()) {
+            $format = new FormatService();
+            $imageName = $format->saveImages(request()->file('image'), [
+                'image' => self::SIZE_IMAGE_NEWS, 'thumb' => self::SIZE_THUMB_NEWS
+            ]);
+
+            $this->attributes['image'] = $imageName;
+        }
+    }
+}
