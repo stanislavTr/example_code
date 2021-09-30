@@ -1,0 +1,194 @@
+<?php
+
+
+namespace App\Repositories;
+
+
+use App\Models\News;
+use Illuminate\Support\Facades\Cache;
+
+class NewsRepository
+{
+    /**
+     * @var News
+     */
+    private News $model;
+
+    /**
+     * NewsRepository constructor.
+     */
+    public function __construct()
+    {
+        $this->model = new News();
+    }
+
+    /**
+     * @param int $locked
+     * @param int $lang
+     * @param string $column
+     * @param string $direction
+     * @param int|null $limit
+     * @return mixed
+     */
+    public function getNews(int $locked, int $lang = 2, string $column = 'created_at', string $direction = 'DESC', int $limit = null)
+    {
+        /*return Cache::tags(['news'])
+            ->remember('all_' . $column . $direction . $locked . $limit, 33600, function () use (
+                $column, $direction, $limit, $locked
+            ) {*/
+
+        $query = $this->model->orderBy($column, $direction);
+        $query->with(['text' => function ($dba) use ($lang) {
+            $dba->where('lang_id', $lang);
+        }]);
+
+        return $query->when($limit, function ($query) use ($limit) {
+            $query->limit($limit);
+        })->when(!$locked, function ($query) use ($locked) {
+            $query->where('locked', $locked);
+        })->get();
+        //});
+    }
+
+    /**
+     * @param int $locked
+     *
+     * @return array
+     */
+    public function getNewsDate(int $locked): array
+    {
+        return Cache::tags(['news'])->remember('archive' . $locked, 33600, function () use ($locked) {
+
+            $query = $this->model->select('created_at')->orderBy('created_at', 'DESC')
+                ->groupByRaw('YEAR(`created_at`), MONTH(`created_at`)');
+
+            if (!$locked) {
+                $query->where('locked', $locked);
+            }
+
+            $collection = $query->get();
+
+            $archive = [];
+            foreach ($collection as $news) {
+                $archiveDate = date("Y/m", strtotime($news->created_at));
+                $archive[$archiveDate]['date_string'] = date("F Y", strtotime($news->created_at));
+            }
+
+            return $archive;
+        });
+    }
+
+    /**
+     * @param string $path
+     * @param int $locked
+     *
+     * @return mixed
+     */
+    public function getDetailNews(string $path, int $locked)
+    {
+        return Cache::tags(['news'])
+            ->remember($path . '_' . $locked, 33600, function () use ($path, $locked) {
+
+                $query = $this->model->where('path', $path);
+
+                return $query->when(!$locked, function ($query) use ($locked) {
+                    $query->where('locked', $locked);
+                })->first();
+            });
+    }
+
+    /**
+     * @param int $id
+     *
+     * @return News|\Illuminate\Database\Eloquent\Builder|\Illuminate\Database\Eloquent\Model|object|null
+     */
+    public function getNewsById(int $id)
+    {
+        return $this->model->where('id', $id)->first();
+    }
+
+    /**
+     * @param string $string
+     * @param int $locked
+     *
+     * @return mixed
+     */
+    public function getNewsByLike(string $string, int $locked)
+    {
+        return Cache::tags(['news'])
+            ->remember('like' . $string . $locked, 33600, function () use ($string, $locked) {
+
+                $query = $this->model->orderBy('created_at', 'DESC')->where('title', 'like', '%' . $string . '%')
+                    ->orWhere('description', 'like', '%' . $string . '%');
+
+                return $query->when(!$locked, function ($query) use ($locked) {
+                    $query->where('locked', $locked);
+                })->get();
+            });
+    }
+
+    /**
+     * @param string $year
+     * @param string $month
+     * @param int $locked
+     *
+     * @return mixed
+     */
+    public function getNewsByYM(string $year, string $month, int $locked)
+    {
+        $date = $year . '-' . $month;
+
+        return Cache::tags(['news'])
+            ->remember('date' . $date . $locked, 33600, function () use ($date, $locked) {
+
+                $query = $this->model->where('created_at', 'like', $date . '%')
+                    ->orderBy('created_at', 'DESC');
+
+                return $query->when(!$locked, function ($query) use ($locked) {
+                    $query->where('locked', $locked);
+                })->get();
+            });
+    }
+
+    /**
+     * @param int $locked
+     * @param int $limit
+     *
+     * @return mixed
+     */
+    public function getBreakingNews(int $locked, int $limit = 5)
+    {
+        return Cache::tags(['news'])
+            ->remember('breaking' . $limit . $locked, 33600, function () use ($locked, $limit) {
+
+                $query = $this->model->where('breaking', 1)->orderBy('created_at', 'DESC');
+
+                return $query->when(!$locked, function ($query) use ($locked) {
+                    $query->where('locked', $locked);
+                })->limit($limit)->get();
+            });
+    }
+
+    /**
+     * @param array $request
+     */
+    public function updateOrCreate(array $request): void
+    {
+        $shop = News::firstOrNew(['id' => $request['id'] ?? null]);
+        $shop->setLockedAttribute($request['locked'] ?? null);
+        $shop->setBreakingAttribute($request['breaking'] ?? null);
+        $shop->fill($request);
+        $shop->save();
+    }
+
+    /**
+     * @param int $id
+     *
+     * @return bool|mixed|null
+     * @throws \Exception
+     */
+    public function delete(int $id)
+    {
+        return $this->model->where('id', $id)->delete();
+    }
+}
