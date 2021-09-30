@@ -5,6 +5,7 @@ namespace App\Repositories;
 
 
 use App\Models\News;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Cache;
 
 class NewsRepository
@@ -28,9 +29,9 @@ class NewsRepository
      * @param string $column
      * @param string $direction
      * @param int|null $limit
-     * @return mixed
+     * @return Collection|null
      */
-    public function getNews(int $locked, int $lang = 2, string $column = 'created_at', string $direction = 'DESC', int $limit = null)
+    public function getNews(int $locked, string $column = 'created_at', string $direction = 'DESC', int $limit = null, int $lang = 2): ?Collection
     {
         /*return Cache::tags(['news'])
             ->remember('all_' . $column . $direction . $locked . $limit, 33600, function () use (
@@ -82,9 +83,9 @@ class NewsRepository
      * @param string $path
      * @param int $locked
      *
-     * @return mixed
+     * @return News|null
      */
-    public function getDetailNews(string $path, int $locked)
+    public function getDetailNews(string $path, int $locked): ?News
     {
         return Cache::tags(['news'])
             ->remember($path . '_' . $locked, 33600, function () use ($path, $locked) {
@@ -100,9 +101,9 @@ class NewsRepository
     /**
      * @param int $id
      *
-     * @return News|\Illuminate\Database\Eloquent\Builder|\Illuminate\Database\Eloquent\Model|object|null
+     * @return News|null
      */
-    public function getNewsById(int $id)
+    public function getNewsById(int $id): ?News
     {
         return $this->model->where('id', $id)->first();
     }
@@ -111,9 +112,9 @@ class NewsRepository
      * @param string $string
      * @param int $locked
      *
-     * @return mixed
+     * @return Collection|null
      */
-    public function getNewsByLike(string $string, int $locked)
+    public function getNewsByLike(string $string, int $locked): ?Collection
     {
         return Cache::tags(['news'])
             ->remember('like' . $string . $locked, 33600, function () use ($string, $locked) {
@@ -132,9 +133,9 @@ class NewsRepository
      * @param string $month
      * @param int $locked
      *
-     * @return mixed
+     * @return Collection|null
      */
-    public function getNewsByYM(string $year, string $month, int $locked)
+    public function getNewsByYM(string $year, string $month, int $locked): ?Collection
     {
         $date = $year . '-' . $month;
 
@@ -154,9 +155,9 @@ class NewsRepository
      * @param int $locked
      * @param int $limit
      *
-     * @return mixed
+     * @return Collection|null
      */
-    public function getBreakingNews(int $locked, int $limit = 5)
+    public function getBreakingNews(int $locked, int $limit = 5): ?Collection
     {
         return Cache::tags(['news'])
             ->remember('breaking' . $limit . $locked, 33600, function () use ($locked, $limit) {
@@ -184,10 +185,10 @@ class NewsRepository
     /**
      * @param int $id
      *
-     * @return bool|mixed|null
+     * @return bool|null
      * @throws \Exception
      */
-    public function delete(int $id)
+    public function delete(int $id): ?bool
     {
         return $this->model->where('id', $id)->delete();
     }
