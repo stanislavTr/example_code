@@ -23,7 +23,7 @@ class FormatService
      *
      * @return Metable
      */
-    public function formatMetaData(Metable $data): Metable
+    public function formatMetaData(Metable $data): Meta
     {
         $meta = new Meta();
 
