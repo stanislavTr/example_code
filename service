@@ -1,0 +1,160 @@
+<?php
+
+namespace App\Services;
+
+use App\Interfaces\Metable;
+use App\Models\Meta;
+use Illuminate\Http\UploadedFile;
+use Intervention\Image\Facades\Image;
+
+class FormatService
+{
+    const PATH_SHOP_IMAGE = '/uploads/products/images/';
+    const PATH_SHOP_THUMB = '/uploads/products/thumbs/';
+    const PATH_IMAGE = '/uploads/images/';
+    const PATH_THUMB = '/uploads/thumbs/';
+    const PATH_PHOTO = '/uploads/photos/';
+    const PATH_CONTACT = '/uploads/contact/';
+    const PATH_RESUME = '/uploads/resume/';
+    const PATH_NO_IMAGE_FOUND = '/img/no_image_found.png';
+
+    /**
+     * @param Metable $data
+     *
+     * @return Metable
+     */
+    public function formatMetaData(Metable $data)
+    {
+        $meta = new Meta();
+
+        return $meta->setTitle($data->title)
+            ->setUrl($data->url)
+            ->setImage($data->full_thumb)
+            ->setCreatedAt($data->created_at ?? null)
+            ->setUpdatedAt($data->updated_at ?? null)
+            ->setDescription($data->meta_description)
+            ->setAuthor($data->author ?? null);
+    }
+
+    /**
+     * @param string|null $image
+     * @param string|null $sizeSuffix
+     *
+     * @return string
+     */
+    public function formatImage(?string $image, ?string $sizeSuffix): string
+    {
+        if (isset($image)) {
+            $info = pathinfo(storage_path() . $image);
+            return $info['filename'] . $sizeSuffix . '.webp';
+        }
+        return $image;
+    }
+
+    /**
+     * @param UploadedFile $image
+     * @param array $size
+     * @param string $pathImage
+     * @param string $pathThumb
+     *
+     * @return string
+     */
+    public function saveImages(
+        UploadedFile $image,
+        array $size,
+        string $pathImage = self::PATH_IMAGE,
+        string $pathThumb = self::PATH_THUMB
+    ): string
+    {
+        $imageName = time() . $image->getClientOriginalName();
+        $destinationPath = public_path($pathImage);
+
+        //$image840 = $this->formatImage($destinationPath . $imageName, '_840');
+        $newImageName = $this->formatImage($destinationPath . $imageName, null);
+        $imageName480 = $this->formatImage($destinationPath . $imageName, '_480');
+
+        $image->move($destinationPath, $imageName);
+
+        $this->resizeImage($destinationPath . $imageName, $newImageName, $pathImage, $size['image']);
+        $this->resizeImage($destinationPath . $imageName, $imageName480, $pathImage, 480);
+        $this->resizeImage($destinationPath . $imageName, $newImageName, $pathThumb, $size['thumb']);
+        $this->resizeImage($destinationPath . $imageName, $imageName480, $pathThumb, 480);
+
+        return $newImageName;
+    }
+
+    /**
+     * @param UploadedFile $file
+     *
+     * @return string
+     */
+    public function uploadFile(UploadedFile $file)
+    {
+        $fileName = time() . '.' . $file->extension();
+
+        $file->move(public_path(self::PATH_RESUME), $fileName);
+
+        return $fileName;
+    }
+
+    /**
+     * @param UploadedFile $image
+     * @param string $path
+     *
+     * @return string
+     */
+    public function uploadPhoto(UploadedFile $image, string $path)
+    {
+        $imageName = time() . $image->getClientOriginalName();
+        $destinationPath = public_path($path);
+
+        $image->move($destinationPath, $imageName);
+
+        return $imageName;
+    }
+
+    /**
+     * @param string $image
+     * @param string $imageName
+     * @param string $path
+     * @param int $size
+     */
+    private function resizeImage(string $image, string $imageName, string $path, int $size): void
+    {
+        Image::make($image)->widen($size, function ($constraint) {
+            $constraint->upsize();
+        })->save(public_path($path) . $imageName);
+    }
+
+    /**
+     * @param string $description
+     * @param int $length
+     *
+     * @return string
+     */
+    public function setMetaDescription(string $description, $length = 152)
+    {
+        $string = strip_tags($description);
+        $string = str_replace('&Euml;', 'E', $string);
+        $string = str_replace('&euml;', 'e', $string);
+        $string = trim(preg_replace('/&#?[a-z0-9]+;/i', ' ', $string));
+        $string = substr($string, 0, $length);
+        $string = rtrim($string, "!,.-");
+        $string = substr($string, 0, strrpos($string, ' '));
+
+        return $string . "…";
+    }
+
+    /**
+     * @param string $string
+     *
+     * @return string
+     */
+    public function getTitlePath(string $string): string
+    {
+        $string = str_replace('Ë', 'E', $string);
+        $string = str_replace('ë', 'e', $string);
+
+        return strtolower(preg_replace('/[^A-Za-z0-9-_]+/', '-', trim($string)));
+    }
+}
