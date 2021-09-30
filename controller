@@ -1,0 +1,307 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Http\Middleware\LocaleMiddleware;
+use App\Models\Language;
+use App\Models\Meta;
+use App\Repositories\NewsRepository;
+use App\Repositories\CategoryRepository;
+use App\Repositories\PageRepository;
+use App\Repositories\LocationRepository;
+use App\Repositories\UserRepository;
+use App\Services\FormatService;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
+
+class NewsController extends Controller
+{
+    /**
+     * @var NewsRepository
+     */
+    private NewsRepository $newsRepository;
+
+    /**
+     * @var CategoryRepository
+     */
+    private CategoryRepository $categoryRepository;
+    /**
+     * @var FormatService
+     */
+    private FormatService $formatService;
+
+    /**
+     * @var LocationRepository
+     */
+    private LocationRepository $locationRepository;
+
+    /**
+     * @var UserRepository
+     */
+    private UserRepository $userRepository;
+
+    /**
+     * @var Meta
+     */
+    private Meta $meta;
+
+    /**
+     * @var PageRepository
+     */
+    private PageRepository $pageRepository;
+
+    /**
+     * News constructor.
+     *
+     * @param NewsRepository $newsRepository
+     * @param CategoryRepository $categoryRepository
+     * @param FormatService $formatService
+     * @param LocationRepository $locationRepository
+     * @param UserRepository $userRepository
+     * @param PageRepository $pageRepository
+     * @param Meta $meta
+     */
+    public function __construct(
+        NewsRepository $newsRepository,
+        CategoryRepository $categoryRepository,
+        FormatService $formatService,
+        LocationRepository $locationRepository,
+        UserRepository $userRepository,
+        PageRepository $pageRepository,
+        Meta $meta
+    )
+    {
+        $this->newsRepository = $newsRepository;
+        $this->categoryRepository = $categoryRepository;
+        $this->formatService = $formatService;
+        $this->locationRepository = $locationRepository;
+        $this->userRepository = $userRepository;
+        $this->meta = $meta;
+        $this->pageRepository = $pageRepository;
+    }
+
+    /**
+     * @return \Illuminate\Contracts\View\Factory|\Illuminate\View\View
+     */
+    public function index()
+    {
+        $admin = Auth::check();
+
+        $locale = LocaleMiddleware::getLocale();
+        $localeId = Language::where('lang', $locale)->first()->id;
+
+        $page = $this->pageRepository->getPageByNamePage('news');
+
+        $this->meta->setTitle($page->title)->setUrl($page->url)
+            ->setImage($page->full_image)->setDescription($page->description);
+
+        $data['news'] = $this->newsRepository->getNews($admin, $localeId);
+        $data['meta'] = $this->meta;
+        $data['shops'] = $this->locationRepository->getLocations($admin);
+        $data['breakingNews'] = $this->newsRepository->getBreakingNews($admin, 1)->first();
+        $data['login'] = $admin;
+
+        return view('news.index', $data);
+    }
+
+    /**
+     * @param string $path
+     *
+     * @return \Illuminate\Contracts\View\Factory|\Illuminate\View\View
+     */
+    public function show(string $path)
+    {
+        $admin = Auth::check();
+
+        $news = $this->newsRepository->getDetailNews($path, $admin);
+        if (!$news) {
+            abort(404);
+        }
+
+        $news->url = 'news/' . $news->path;
+
+        $data = $this->getNewData($admin);
+        $data['meta'] = $this->formatService->formatMetaData($news);
+        $data['news'] = $news;
+
+        return view('news.detail', $data);
+    }
+
+    /**
+     * @param Request $request
+     *
+     * @return \Illuminate\Contracts\View\Factory|\Illuminate\View\View
+     */
+    public function search(Request $request)
+    {
+        $admin = Auth::check();
+        $string = $request->input('s');
+
+        $page = $this->pageRepository->getPageByNamePage('search');
+
+        $this->meta->setTitle($page->title)->setUrl($page->url . '/' . $string)
+            ->setImage($page->full_image)->setDescription($page->description);
+
+        $data = $this->getNewData($admin);
+        $data['meta'] = $this->meta;
+        $data['news'] = $this->newsRepository->getNewsByLike($string, $admin);;
+
+        return view('news.two-column', $data);
+    }
+
+    /**
+     * @param string $name
+     *
+     * @return \Illuminate\Contracts\View\Factory|\Illuminate\View\View
+     */
+    public function author(string $name)
+    {
+        $admin = Auth::check();
+
+        $user = $this->userRepository->getUserByName($name);
+        if (!$user) {
+            abort(404);
+        }
+
+        $page = $this->pageRepository->getPageByNamePage('author');
+
+        $this->meta->setTitle($user->name . $page->title)->setUrl($page->url . '/' . $name)
+            ->setAuthor($name)->setImage($page->full_image)->setDescription($page->description);
+
+        $data = $this->getNewData($admin);
+        $data['meta'] = $this->meta;
+        $data['news'] = $user->news;
+
+        return view('news.two-column', $data);
+    }
+
+    /**
+     * @param string $year
+     * @param string $month
+     *
+     * @return \Illuminate\Contracts\View\Factory|\Illuminate\View\View
+     */
+    public function archive(string $year, string $month)
+    {
+        $admin = Auth::check();
+
+        $news = $this->newsRepository->getNewsByYM($year, $month, $admin);
+        if (!$news) {
+            abort(404);
+        }
+
+        $page = $this->pageRepository->getPageByNamePage('archive');
+
+        $this->meta->setTitle(date("F Y", strtotime($year . '-' . $month)) . $page->title)
+            ->setUrl($year . '/' . $month)->setImage($page->full_image)->setDescription($page->description);
+
+        $data = $this->getNewData($admin);
+        $data['meta'] = $this->meta;
+        $data['news'] = $news;
+
+        return view('news.two-column', $data);
+    }
+
+    /**
+     * @param string $column
+     * @param string $direction
+     *
+     * @return \Illuminate\Contracts\View\Factory|\Illuminate\Http\RedirectResponse|\Illuminate\View\View
+     */
+    public function adminNews(string $column = 'created_at', string $direction = 'DESC')
+    {
+        $data['news'] = $this->newsRepository->getNews(Auth::check(), $column, $direction);
+        $data['order'] = ['column' => $column, 'direction' => $direction];
+        $data['title'] = 'Blog - Admin';
+
+        return view('admin.news.index', $data);
+    }
+
+    /**
+     * @return \Illuminate\Contracts\View\Factory|\Illuminate\Http\RedirectResponse|\Illuminate\View\View
+     */
+    public function create()
+    {
+        $data['authors'] = $this->userRepository->getUser();
+        $data['categories'] = $this->categoryRepository->getCategories();
+        $data['title'] = 'Create Blog';
+
+        return view('admin.news.edit', $data);
+    }
+
+    /**
+     * @param int $id
+     *
+     * @return \Illuminate\Contracts\View\Factory|\Illuminate\Http\RedirectResponse|\Illuminate\View\View
+     */
+    public function edit(int $id)
+    {
+        $data['news'] = $this->newsRepository->getNewsById($id);
+        if (!$data['news']) {
+            abort(404);
+        }
+        $data['authors'] = $this->userRepository->getUser();
+        $data['categories'] = $this->categoryRepository->getCategories();
+        $data['title'] = $data['news']->title . ' - Edit';
+
+        return view('admin.news.edit', $data);
+    }
+
+    /**
+     * @param Request $request
+     *
+     * @return \Illuminate\Http\RedirectResponse
+     */
+    public function store(Request $request)
+    {
+        $valid = $request->validate([
+            'title' => 'required',
+        ]);
+
+        if ($valid) {
+            $message = $request->input('id')
+                ? 'Edit ' . $request->input('name') . ' successfully'
+                : 'Create successfully';
+
+            $this->newsRepository->updateOrCreate($request->all());
+
+            Cache::tags(['news', 'categories'])->flush();
+
+            return redirect()->to('/admints/blog')->with('message', $message);
+        }
+
+        return redirect()->to('/admints/blog')->with('message', 'Wrong Request!');
+    }
+
+    /**
+     * @param int $id
+     *
+     * @return \Illuminate\Http\JsonResponse|\Illuminate\Http\RedirectResponse
+     * @throws \Exception
+     */
+    public function destroy(int $id)
+    {
+        $content = $this->newsRepository->delete($id);
+
+        Cache::tags(['news', 'categories'])->flush();
+
+        return response()->json(['success' => $content]);
+    }
+
+    /**
+     * @param int $admin
+     *
+     * @return array
+     */
+    private function getNewData(int $admin): array
+    {
+        $data['breakingNews'] = $this->newsRepository->getBreakingNews($admin);
+        $data['categories'] = $this->categoryRepository->getCategories();
+        $data['shops'] = $this->locationRepository->getLocations($admin);
+        $data['archive'] = $this->newsRepository->getNewsDate($admin);
+        $data['login'] = $admin;
+
+        return $data;
+    }
+}
